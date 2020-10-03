@@ -105,7 +105,7 @@ local function set_http_headers(http_headers)
     if useragent and not option_was_set("user-agent") then
         mp.set_property("file-local-options/user-agent", useragent)
     end
-    local additional_fields = {"Cookie", "Referer", "X-Forwarded-For"}
+    local additional_fields = {"Cookie", "Referer", "X-Forwarded-For", "Authorization"}
     for idx, item in pairs(additional_fields) do
         local field_value = http_headers[item]
         if field_value then
@@ -481,6 +481,44 @@ local function formats_to_edl(json, formats, use_all_formats)
     return res
 end
 
+local function table_print (tt, indent, done)
+    done = done or {}
+    indent = indent or 0
+    if type(tt) == "table" then
+        local sb = {}
+        for key, value in pairs (tt) do
+        table.insert(sb, string.rep (" ", indent)) -- indent it
+        if type (value) == "table" and not done [value] then
+            done [value] = true
+            table.insert(sb, key .. " = {\n");
+            table.insert(sb, table_print (value, indent + 2, done))
+            table.insert(sb, string.rep (" ", indent)) -- indent it
+            table.insert(sb, "}\n");
+        elseif "number" == type(key) then
+            table.insert(sb, string.format("\"%s\"\n", tostring(value)))
+        else
+            table.insert(sb, string.format(
+                "%s = \"%s\"\n", tostring (key), tostring(value)))
+            end
+        end
+        return table.concat(sb)
+    else
+        return tt .. "\n"
+    end
+end
+  
+local function to_string( tbl )
+    if  "nil"       == type( tbl ) then
+        return tostring(nil)
+    elseif  "table" == type( tbl ) then
+        return table_print(tbl)
+    elseif  "string" == type( tbl ) then
+        return tbl
+    else
+        return tostring(tbl)
+    end
+ end
+
 local function add_single_video(json)
     local streamurl = ""
     local format_info = ""
@@ -562,6 +600,10 @@ local function add_single_video(json)
     end
 
     msg.verbose("format selection: " .. format_info)
+    local edl_headers = json["requested_formats"][1]["http_headers"]
+    if edl_headers then
+        set_http_headers(edl_headers)
+    end
     msg.debug("streamurl: " .. streamurl)
 
     mp.set_property("stream-open-filename", streamurl:gsub("^data:", "data://", 1))
